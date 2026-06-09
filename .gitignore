@@ -1,0 +1,10 @@
+# datos descargados (se regeneran solos)
+data/results.csv
+data/shootouts.csv
+
+# entorno
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
