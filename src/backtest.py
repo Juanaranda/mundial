@@ -205,3 +205,14 @@ if __name__ == "__main__":
         hl = float(sys.argv[2]) if len(sys.argv) > 2 else 365 * 3
         bl = float(sys.argv[3]) if len(sys.argv) > 3 else 0.7
         calibrate_recent(df, hl, bl)
+    elif mode == "wc2026":
+        # Cómo le va al modelo en el Mundial 2026, sobre los partidos jugados.
+        wc = df[(df["tournament"] == "FIFA World Cup") &
+                (df["date"] >= "2026-06-01")]
+        print(f"\n=== Mundial 2026 — {len(wc)} partidos jugados ===")
+        preds = predict_set(df, wc, "2026-06-10", 365 * 4, blend=0.6)
+        _print_metrics("modelo (calibrado)", _metrics(preds))
+        _print_metrics("baseline", baseline_metrics(wc))
+        if preds:
+            print("\n=== Calibración ===")
+            print(_calibration_table(preds))

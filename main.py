@@ -18,6 +18,10 @@ Flags de sede (opcionales, para 'partido' y 'goles'):
     --local <equipo>   el partido NO es neutral; ese equipo juega de local
     --sede <ciudad>    resuelve la altitud por nombre (ej: "la paz", "quito")
     --alt <metros>     altitud de la sede explícita (pisa a --sede)
+
+Antes de cada predicción el sistema se ACTUALIZA solo: refresca el histórico
+de resultados y busca la forma de los jugadores vía Claude (si hay
+ANTHROPIC_API_KEY). Para saltearlo usá --no-update.
 """
 from __future__ import annotations
 
@@ -35,9 +39,27 @@ HALF_LIFE = 365 * 4           # vida media del peso por recencia (calibrado vs M
 BLEND = 0.6                   # peso Dixon-Coles vs Elo en el 1X2 (calibrado: 60% DC / 40% Elo)
 
 
-def build_model():
-    print("· Cargando histórico de selecciones...")
-    df = load_results()
+def auto_update(teams, do_update=True):
+    """Antes de predecir: refresca el histórico y la forma de los jugadores.
+
+    Tolerante a fallos: si no hay ANTHROPIC_API_KEY o no está `anthropic`,
+    avisa y sigue sin el ajuste por forma (no rompe la predicción).
+    """
+    if not do_update:
+        return
+    try:
+        from src.web_update import update_player_form
+        print(f"· Actualizando forma de jugadores vía Claude: {', '.join(teams)}...")
+        update_player_form(teams)
+    except Exception as e:
+        print(f"· (no se pudo actualizar la forma: {e})")
+        print("  → sigo con el histórico; para activarlo: export ANTHROPIC_API_KEY=...")
+
+
+def build_model(refresh=True):
+    print("· Cargando histórico de selecciones"
+          + (" (refrescando desde la web)..." if refresh else "..."))
+    df = load_results(refresh=refresh)
 
     print("· Calculando Elo dinámico...")
     df, elo = compute_elo(df)
@@ -81,6 +103,7 @@ def _resolve_conditions(home, away, opts):
 
 
 def cmd_partido(home, away, extra):
+    auto_update([home, away], do_update="--no-update" not in extra)
     model, elo = build_model()
     if home not in model.attack or away not in model.attack:
         print(f"\nNo tengo suficientes datos de {home} o {away}.")
@@ -121,6 +144,7 @@ def cmd_partido(home, away, extra):
 
 
 def cmd_goles(home, away, extra):
+    auto_update([home, away], do_update="--no-update" not in extra)
     model, _ = build_model()
     if home not in model.attack or away not in model.attack:
         print(f"\nNo tengo suficientes datos de {home} o {away}.")
