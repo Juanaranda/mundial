@@ -9,6 +9,8 @@ Predictor de partidos y simulador del Mundial que combina **dos señales**:
 2. **Estado actual de los jugadores** — la forma reciente de los convocados
    (rating en el club, lesiones, disponibilidad) ajusta el ataque/defensa de
    cada selección.
+3. **Condiciones de la sede** — altitud y localía ajustan los goles esperados
+   por encima de la fuerza histórica (Bolivia en La Paz es el caso canónico).
 
 Con eso se simula el torneo miles de veces (Monte Carlo) para estimar la
 probabilidad de que cada selección avance de fase y sea campeón.
@@ -35,9 +37,23 @@ pip install -r requirements.txt
 # Predecir un partido (cancha neutral)
 python main.py partido Argentina France
 
+# Partido con sede: Bolivia de local en La Paz (3640 m)
+python main.py partido Bolivia Brazil --local Bolivia --sede "la paz"
+
+# Distribución de goles: P(cada equipo marque 0,1,2,3,4,5+)
+python main.py goles Argentina France
+
 # Simular el torneo completo
 python main.py torneo
 ```
+
+### Flags de sede (para `partido` y `goles`)
+
+| Flag | Qué hace |
+|------|----------|
+| `--local <equipo>` | el partido NO es neutral; ese equipo juega de local |
+| `--sede <ciudad>`  | resuelve la altitud por nombre (`"la paz"`, `"quito"`, `"mexico city"`...) |
+| `--alt <metros>`   | altitud de la sede explícita (pisa a `--sede`) |
 
 ## Estructura
 
@@ -47,8 +63,9 @@ mundial/
 ├── src/
 │   ├── data.py             # descarga/carga del histórico
 │   ├── elo.py              # Elo dinámico por selección
-│   ├── dixon_coles.py      # modelo de marcadores
+│   ├── dixon_coles.py      # modelo de marcadores + distribución de goles
 │   ├── squad_strength.py   # ajuste por forma de los jugadores
+│   ├── conditions.py       # condiciones de sede (altitud, localía)
 │   └── simulate.py         # Monte Carlo del torneo
 └── data/
     └── player_form.csv     # (lo poblás vos) forma de los jugadores

@@ -98,11 +98,17 @@ class DixonColes:
 
     # ---- predicción ----
     def score_matrix(self, home: str, away: str, neutral: bool = True,
-                     max_goals: int = 10) -> np.ndarray:
-        """Matriz de probabilidad P(goles_local=x, goles_visita=y)."""
+                     max_goals: int = 10, home_log_adj: float = 0.0,
+                     away_log_adj: float = 0.0) -> np.ndarray:
+        """Matriz de probabilidad P(goles_local=x, goles_visita=y).
+
+        `home_log_adj` / `away_log_adj` son ajustes en escala logarítmica que
+        se suman a la tasa de goles de cada equipo (p. ej. altitud, ver
+        `conditions.py`).
+        """
         adv = 0.0 if neutral else self.home_adv
-        lam = np.exp(self.attack[home] - self.defense[away] + adv)
-        mu = np.exp(self.attack[away] - self.defense[home])
+        lam = np.exp(self.attack[home] - self.defense[away] + adv + home_log_adj)
+        mu = np.exp(self.attack[away] - self.defense[home] + away_log_adj)
         lam, mu = min(lam, 12), min(mu, 12)
 
         x = np.arange(0, max_goals + 1)
@@ -115,8 +121,11 @@ class DixonColes:
             mat[i, j] *= _tau(np.array(i), np.array(j), lam, mu, self.rho)
         return mat / mat.sum()
 
-    def predict(self, home: str, away: str, neutral: bool = True) -> dict:
-        mat = self.score_matrix(home, away, neutral)
+    def predict(self, home: str, away: str, neutral: bool = True,
+                home_log_adj: float = 0.0, away_log_adj: float = 0.0) -> dict:
+        mat = self.score_matrix(home, away, neutral,
+                                home_log_adj=home_log_adj,
+                                away_log_adj=away_log_adj)
         p_home = np.tril(mat, -1).sum()
         p_draw = np.trace(mat)
         p_away = np.triu(mat, 1).sum()
@@ -130,6 +139,29 @@ class DixonColes:
             "exp_away_goals": float((mat.sum(0) * np.arange(mat.shape[1])).sum()),
             "most_likely_score": (int(i), int(j)),
         }
+
+    def goal_distribution(self, home: str, away: str, neutral: bool = True,
+                          home_log_adj: float = 0.0, away_log_adj: float = 0.0,
+                          cap: int = 5) -> dict:
+        """Probabilidad de que cada equipo marque 0,1,...,cap-1, cap+ goles.
+
+        Devuelve {"home": [p0,p1,...,p(cap-1), p(cap o más)], "away": [...]},
+        usando los márgenes de la matriz de marcadores (los goles de cada
+        equipo no son independientes por la corrección DC, así que se obtienen
+        marginalizando la matriz conjunta).
+        """
+        mat = self.score_matrix(home, away, neutral, max_goals=15,
+                                home_log_adj=home_log_adj,
+                                away_log_adj=away_log_adj)
+        home_marg = mat.sum(axis=1)   # P(local marca x)
+        away_marg = mat.sum(axis=0)   # P(visita marca y)
+
+        def bucket(marg):
+            dist = list(marg[:cap])
+            dist.append(float(marg[cap:].sum()))  # cap o más
+            return [float(p) for p in dist]
+
+        return {"home": bucket(home_marg), "away": bucket(away_marg)}
 
 
 if __name__ == "__main__":

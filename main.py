@@ -4,16 +4,25 @@
   2. calcula Elo dinámico (fuerza relativa)
   3. ajusta el modelo de marcadores Dixon-Coles (ponderado por recencia)
   4. aplica el ajuste por estado actual de los jugadores (si hay datos)
-  5. predice un partido y/o simula el torneo
+  5. aplica condiciones de sede (altitud, localía)
+  6. predice un partido, la distribución de goles, o simula el torneo
 
 Uso:
-    python main.py partido Argentina Francia
+    python main.py partido Argentina France
+    python main.py partido Bolivia Brazil --local Bolivia --sede "la paz"
+    python main.py goles Argentina France
     python main.py torneo
+
+Flags de sede (opcionales, para 'partido' y 'goles'):
+    --local <equipo>   el partido NO es neutral; ese equipo juega de local
+    --sede <ciudad>    resuelve la altitud por nombre (ej: "la paz", "quito")
+    --alt <metros>     altitud de la sede explícita (pisa a --sede)
 """
 from __future__ import annotations
 
 import sys
 
+from src.conditions import venue_adjustments, venue_altitude
 from src.data import load_results
 from src.dixon_coles import DixonColes
 from src.elo import compute_elo, win_probabilities
@@ -45,18 +54,50 @@ def build_model():
     return model, elo
 
 
-def cmd_partido(home: str, away: str):
+def _parse_venue(extra: list[str]) -> dict:
+    """Lee los flags de sede de la lista de argumentos sobrantes."""
+    opts = {"local": None, "city": None, "alt": None}
+    i = 0
+    while i < len(extra):
+        if extra[i] == "--local" and i + 1 < len(extra):
+            opts["local"] = extra[i + 1]; i += 2
+        elif extra[i] == "--sede" and i + 1 < len(extra):
+            opts["city"] = extra[i + 1]; i += 2
+        elif extra[i] == "--alt" and i + 1 < len(extra):
+            opts["alt"] = float(extra[i + 1]); i += 2
+        else:
+            i += 1
+    return opts
+
+
+def _resolve_conditions(home, away, opts):
+    """Traduce los flags de sede a (neutral, home_log_adj, away_log_adj)."""
+    neutral = opts["local"] is None
+    alt = venue_altitude(city=opts["city"], altitude=opts["alt"])
+    h_adj, a_adj = venue_adjustments(home, away, alt)
+    return neutral, alt, h_adj, a_adj
+
+
+def cmd_partido(home, away, extra):
     model, elo = build_model()
     if home not in model.attack or away not in model.attack:
         print(f"\nNo tengo suficientes datos de {home} o {away}.")
         return
-    dc = model.predict(home, away, neutral=True)
-    eh, _, ea = elo.get(home, 1500), 0, elo.get(away, 1500)
-    ep_h, ep_d, ep_a = win_probabilities(eh, ea, neutral=True)
+    opts = _parse_venue(extra)
+    neutral, alt, h_adj, a_adj = _resolve_conditions(home, away, opts)
 
-    print(f"\n=== {home} vs {away} (cancha neutral) ===")
+    dc = model.predict(home, away, neutral=neutral,
+                       home_log_adj=h_adj, away_log_adj=a_adj)
+    ep_h, ep_d, ep_a = win_probabilities(
+        elo.get(home, 1500), elo.get(away, 1500), neutral=neutral)
+
+    sede = "neutral" if neutral else f"local: {opts['local']}"
+    print(f"\n=== {home} vs {away} ({sede}, altitud {alt:.0f} m) ===")
     print(f"Elo:          {home} {elo.get(home,1500):.0f}  |  "
           f"{away} {elo.get(away,1500):.0f}")
+    if alt > 0:
+        print(f"Ajuste altitud (log goles): {home} {h_adj:+.3f} / "
+              f"{away} {a_adj:+.3f}")
     print("                     Local   Empate  Visita")
     print(f"Dixon-Coles:        {dc['p_home']*100:5.1f}%  "
           f"{dc['p_draw']*100:5.1f}%  {dc['p_away']*100:5.1f}%")
@@ -66,6 +107,26 @@ def cmd_partido(home: str, away: str):
           f"{dc['exp_away_goals']:.2f}")
     print(f"Marcador más probable: {dc['most_likely_score'][0]}-"
           f"{dc['most_likely_score'][1]}")
+
+
+def cmd_goles(home, away, extra):
+    model, _ = build_model()
+    if home not in model.attack or away not in model.attack:
+        print(f"\nNo tengo suficientes datos de {home} o {away}.")
+        return
+    opts = _parse_venue(extra)
+    neutral, alt, h_adj, a_adj = _resolve_conditions(home, away, opts)
+
+    dist = model.goal_distribution(home, away, neutral=neutral,
+                                   home_log_adj=h_adj, away_log_adj=a_adj,
+                                   cap=5)
+    sede = "neutral" if neutral else f"local: {opts['local']}"
+    print(f"\n=== Distribución de goles · {home} vs {away} "
+          f"({sede}, altitud {alt:.0f} m) ===")
+    print("Goles:            0      1      2      3      4     5+")
+    for team, key in [(home, "home"), (away, "away")]:
+        fila = "  ".join(f"{p*100:5.1f}%" for p in dist[key])
+        print(f"{team:<14} {fila}")
 
 
 def cmd_torneo():
@@ -90,7 +151,9 @@ def main():
         print(__doc__)
         return
     if args[0] == "partido" and len(args) >= 3:
-        cmd_partido(args[1], args[2])
+        cmd_partido(args[1], args[2], args[3:])
+    elif args[0] == "goles" and len(args) >= 3:
+        cmd_goles(args[1], args[2], args[3:])
     elif args[0] == "torneo":
         cmd_torneo()
     else:
