@@ -11,6 +11,7 @@ Uso:
     python main.py partido Argentina France
     python main.py partido Bolivia Brazil --local Bolivia --sede "la paz"
     python main.py goles Argentina France
+    python main.py actualizar Argentina France   # forma de jugadores vía Claude (web)
     python main.py torneo
 
 Flags de sede (opcionales, para 'partido' y 'goles'):
@@ -129,6 +130,17 @@ def cmd_goles(home, away, extra):
         print(f"{team:<14} {fila}")
 
 
+def cmd_actualizar(teams):
+    """Actualiza data/player_form.csv buscando en la web vía Claude."""
+    from src.web_update import update_player_form
+
+    if not teams:
+        print("Indicá al menos una selección: "
+              "python main.py actualizar Argentina France")
+        return
+    update_player_form(teams)
+
+
 def cmd_torneo():
     model, _ = build_model()
     # Editá estos grupos con el sorteo real del Mundial 2026.
@@ -154,6 +166,8 @@ def main():
         cmd_partido(args[1], args[2], args[3:])
     elif args[0] == "goles" and len(args) >= 3:
         cmd_goles(args[1], args[2], args[3:])
+    elif args[0] == "actualizar":
+        cmd_actualizar(args[1:])
     elif args[0] == "torneo":
         cmd_torneo()
     else:

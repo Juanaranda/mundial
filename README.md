@@ -21,8 +21,9 @@ probabilidad de que cada selección avance de fase y sea campeón.
 |-----|--------|-------|
 | Resultados históricos (1872→hoy, ~47k partidos) | [martj42/international_results](https://github.com/martj42/international_results) (mirror del dataset de Kaggle) | se baja solo, sin auth |
 | Elo histórico | se calcula en `src/elo.py` desde el histórico | — |
-| Fixtures / alineaciones / lesiones | [API-Football](https://www.api-sports.io/) o [Football-Data.org](https://www.football-data.org/) | requiere API key |
-| Rating por jugador y partido | SofaScore / FotMob | no oficial, scraping |
+| Forma / lesiones de jugadores | **Claude con búsqueda web** (`src/web_update.py`) | solo necesita `ANTHROPIC_API_KEY` — sin APIs deportivas |
+| Fixtures / alineaciones / lesiones | [API-Football](https://www.api-sports.io/) o [Football-Data.org](https://www.football-data.org/) | alternativa, requiere API key |
+| Rating por jugador y partido | SofaScore / FotMob | alternativa, no oficial |
 | Ranking de referencia | [FIFA](https://www.fifa.com/fifa-world-ranking) / [eloratings.net](https://eloratings.net) | opcional |
 
 ## Instalación
@@ -66,6 +67,7 @@ mundial/
 │   ├── dixon_coles.py      # modelo de marcadores + distribución de goles
 │   ├── squad_strength.py   # ajuste por forma de los jugadores
 │   ├── conditions.py       # condiciones de sede (altitud, localía)
+│   ├── web_update.py       # forma de jugadores vía Claude + búsqueda web
 │   └── simulate.py         # Monte Carlo del torneo
 └── data/
     └── player_form.csv     # (lo poblás vos) forma de los jugadores
@@ -88,6 +90,23 @@ Argentina,Lionel Messi,FWD,8.4,7.9,1
 El módulo convierte la diferencia `recent − baseline` en un ajuste sobre el
 ataque (DEL/MED) y la defensa (DEF/GK) de cada selección. Si el archivo no
 existe, el modelo corre igual sin ese ajuste.
+
+### Llenarlo automáticamente con Claude (búsqueda web)
+
+En vez de cargarlo a mano o de contratar una API deportiva, podés pedirle a
+**Claude** que busque en la web la forma reciente y las lesiones, y escriba el
+CSV solo:
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...     # no lo pongas en el código
+
+python main.py actualizar Argentina France Brazil
+```
+
+Usa la herramienta de búsqueda web del lado del servidor de Claude
+(`web_search_20260209`), así que **no depende de ninguna API deportiva** — solo
+de tu clave de Claude. Detalles en `src/web_update.py`.
 
 ## Próximos pasos sugeridos
 
