@@ -31,7 +31,8 @@ from src.simulate import simulate_tournament
 from src.squad_strength import apply_to_model, load_form_adjustments
 
 SINCE = "2014-01-01"          # ventana de entrenamiento del modelo de goles
-HALF_LIFE = 365 * 3           # vida media del peso por recencia (días)
+HALF_LIFE = 365 * 4           # vida media del peso por recencia (calibrado vs Mundial 2022)
+BLEND = 0.6                   # peso Dixon-Coles vs Elo en el 1X2 (calibrado: 60% DC / 40% Elo)
 
 
 def build_model():
@@ -99,10 +100,19 @@ def cmd_partido(home, away, extra):
     if alt > 0:
         print(f"Ajuste altitud (log goles): {home} {h_adj:+.3f} / "
               f"{away} {a_adj:+.3f}")
+    # Modelo combinado calibrado (60% DC + 40% Elo) — el que minimiza el RPS.
+    cb_h = BLEND * dc["p_home"] + (1 - BLEND) * ep_h
+    cb_d = BLEND * dc["p_draw"] + (1 - BLEND) * ep_d
+    cb_a = BLEND * dc["p_away"] + (1 - BLEND) * ep_a
+    s = cb_h + cb_d + cb_a
+    cb_h, cb_d, cb_a = cb_h / s, cb_d / s, cb_a / s
+
     print("                     Local   Empate  Visita")
-    print(f"Dixon-Coles:        {dc['p_home']*100:5.1f}%  "
+    print(f">> COMBINADO:       {cb_h*100:5.1f}%  {cb_d*100:5.1f}%  "
+          f"{cb_a*100:5.1f}%   <- predicción calibrada")
+    print(f"   Dixon-Coles:     {dc['p_home']*100:5.1f}%  "
           f"{dc['p_draw']*100:5.1f}%  {dc['p_away']*100:5.1f}%")
-    print(f"Elo:                {ep_h*100:5.1f}%  {ep_d*100:5.1f}%  "
+    print(f"   Elo:             {ep_h*100:5.1f}%  {ep_d*100:5.1f}%  "
           f"{ep_a*100:5.1f}%")
     print(f"Goles esperados:    {dc['exp_home_goals']:.2f} - "
           f"{dc['exp_away_goals']:.2f}")

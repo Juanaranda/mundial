@@ -108,10 +108,34 @@ Usa la herramienta de búsqueda web del lado del servidor de Claude
 (`web_search_20260209`), así que **no depende de ninguna API deportiva** — solo
 de tu clave de Claude. Detalles en `src/web_update.py`.
 
+## Backtesting y calibración (`src/backtest.py`)
+
+El sistema se valida out-of-sample (sobre partidos que NO vio al entrenar) con
+las métricas estándar de pronóstico deportivo: **RPS** (más bajo = mejor, las
+casas de apuestas andan en ~0.19), log-loss, acierto y calibración.
+
+```bash
+python -m src.backtest wc2022            # calibra contra el Mundial 2022
+python -m src.backtest recent 1460 0.6   # valida 2023-2026 (clasif. + torneos)
+```
+
+Resultados de la calibración (los parámetros ganadores ya están en `main.py`):
+
+| Test | RPS | acierto | n |
+|------|-----|---------|---|
+| Mundial 2022 (puro out-of-sample) | 0.219 | 50.0% | 64 |
+| Clasificatorias + torneos 2023-2026 | **0.165** | 60.8% | 2.656 |
+| Baseline tonto (frecuencias base) | 0.233 | 46% | — |
+
+**Calibración** sobre 2.656 partidos: cuando el modelo dice 70%, pasa ~70%; dice
+89%, pasa 91%. Las probabilidades son confiables, no humo.
+
+Parámetros calibrados (en `main.py`): `half_life = 4 años`, predicción final =
+**60% Dixon-Coles + 40% Elo** (la mezcla que minimiza el RPS).
+
 ## Próximos pasos sugeridos
 
-- **Backtesting**: entrenar con datos hasta 2018 y validar contra el Mundial
-  2022 para calibrar `half_life`, `BETA_ATK/BETA_DEF` y la ventaja de localía.
-- Conectar API-Football para poblar `player_form.csv` automáticamente.
-- Reemplazar/blender Dixon-Coles con un **XGBoost** que use Elo, forma,
-  descanso e importancia del partido como features.
+- Calibrar también `ALT_K` (altitud) y `BETA_ATK/BETA_DEF` (forma) contra el set
+  de validación; recalibrar con los partidos del Mundial 2026 a medida que se jueguen.
+- Reemplazar/blender con un **XGBoost** que use Elo, forma, descanso e
+  importancia del partido como features.
